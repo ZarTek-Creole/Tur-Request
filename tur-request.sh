@@ -617,8 +617,12 @@ proc_reorder() {
   num=0
   for line in `cat $reqfile | tr -s ' ' '^' | tr -d ']' | tr -d '[' | cut -d':' -f2-`; do
     num=$[$num+1]
-    if [ -z "$( echo "$num" | grep ".." )" ]; then
-      newnum="[ $num:]"
+    if [ -z "$( echo "$num" | grep "..." )" ]; then
+      if [ -z "$( echo "$num" | grep ".." )" ]; then
+        newnum="[ $num:]"
+      else
+        newnum="[$num:]"
+      fi
     else
       newnum="[$num:]"
     fi
@@ -799,7 +803,7 @@ proc_checkold() {
             if [ "$gllog" ]; then
               OUTPUT="$STATUSANNOUNCE"
               proc_cookies
-              LINETOSAY="$OUTPUT 14Deleting4 $dir 14because it's from4 $reldate"
+              LINETOSAY="$OUTPUT \00314Deleting\0034 $dir \00314because it's from\0034 $reldate"
               echo `$datebin "+%a %b %e %T %Y"` TURGEN: \"$LINETOSAY\" >> $gllog
               unset LINETOSAY
             fi
@@ -807,7 +811,7 @@ proc_checkold() {
             if [ "$gllog" ]; then
               OUTPUT="$STATUSANNOUNCE"
               proc_cookies
-              LINETOSAY="$OUTPUT 14Was going to delete4 $dir 14because it's from4 $reldate,14 but seems I couldn't."
+              LINETOSAY="$OUTPUT \00314Was going to delete\0034 $dir \00314because it's from\0034 $reldate,\00314 but seems I couldn't."
               echo `$datebin "+%a %b %e %T %Y"` TURGEN: \"$LINETOSAY\" >> $gllog
               unset LINETOSAY
             fi
@@ -853,9 +857,9 @@ proc_request() {
 
   if [ "`$dirloglist_gl | egrep -iv "STATUS: 1|STATUS: 3" | grep "/$WHAT$"`" ]; then
     if [ "$mode" = "gl" ]; then
-	echo "Release already exists on site: `$dirloglist_gl | egrep -iv "STATUS: 1|STATUS: 3" | grep "/$WHAT$" | tr -s "[:blank:]" "-" | sed 's/STATUS:-[0-2]-DIRNAME:-\/site//'`"
+        echo "Release already exists on site: `$dirloglist_gl | egrep -iv "STATUS: 1|STATUS: 3" | grep "/$WHAT$" | tr -s "[:blank:]" "-" | sed 's/STATUS:-[0-2]-DIRNAME:-\/site//'`"
     else
-	echo "14Release already exists on site: 4`$dirloglist_gl | egrep -iv "STATUS: 1|STATUS: 3" | grep "/$WHAT$" | tr -s "[:blank:]" "-" | sed 's/STATUS:-[0-2]-DIRNAME:-\/site//'`"
+        echo "\00314Release already exists on site: \0034`$dirloglist_gl | egrep -iv "STATUS: 1|STATUS: 3" | grep "/$WHAT$" | tr -s "[:blank:]" "-" | sed 's/STATUS:-[0-2]-DIRNAME:-\/site//'`"
     fi
     exit 0
   fi
@@ -885,10 +889,13 @@ proc_request() {
       fi
     fi
 
-    if [ -z "$( echo "$num" | grep ".." )" ]; then
-      num="\[ $num:\]"
+    # Format the request number with proper padding
+    if [ "$num" -lt 10 ]; then
+      newnum="[  $num:]"
+    elif [ "$num" -lt 100 ]; then
+      newnum="[ $num:]"
     else
-      num="\[$num:\]"
+      newnum="[$num:]"
     fi
 
     ## If REWARD is set and REWARD_FREE is not TRUE, check if the user has leech. Dont allow if if so.
@@ -1043,7 +1050,10 @@ proc_reqfilled() {
 
   ## Is it requested? (check by number)
   if [ -z "`echo "$WHAT" | tr -d '[:digit:]'`" ]; then
-    if [ -z "$( echo "$WHAT" | grep ".." )" ]; then
+    # Format the request number with proper padding for comparison
+    if [ "$WHAT" -lt 10 ]; then
+      WHATNEW="[  $WHAT:]"
+    elif [ "$WHAT" -lt 100 ]; then
       WHATNEW="[ $WHAT:]"
     else
       WHATNEW="[$WHAT:]"
@@ -1065,7 +1075,7 @@ proc_reqfilled() {
     else
 
       ## It WAS requested by name. Extract the number of the release.
-      WHATNEW="$( cat $reqfile | grep "\[[\ |0-9][0-9]:\] $WHAT \~" | cut -d ']' -f1 | head -n1 )"
+      WHATNEW="$( cat $reqfile | grep "\[[\ |0-9][0-9]\{0,2\}:\] $WHAT \~" | cut -d ']' -f1 | head -n1 )"
 
       if [ -z "$WHATNEW" ]; then
         echo "Internal Error: Found the $WHAT request in the list but failed to extract its number.."
@@ -1588,7 +1598,7 @@ proc_status() {
 
     LINETOSAY=`echo "$each" | tr -s '^' ' '`
     POS=`echo $LINETOSAY | cut -d' ' -f1-2 | sed 's/] .*/]/'`
-    REL=`echo $LINETOSAY | cut -d' ' -f2-3 | sed -e 's/[0-9]:] //g' -e 's/ ~.*//'`
+    REL=`echo $LINETOSAY | cut -d' ' -f2-3 | sed -e 's/[0-9]\{1,3\}:] //g' -e 's/ ~.*//'`
     USR=`echo $LINETOSAY | cut -d'~' -f2 | sed -e 's/ by //g' -e 's/ (.*//g'`
     FOR=`echo $LINETOSAY | cut -d' ' -f8`
     if [ `echo $LINETOSAY | grep " for " | wc -l` = 0 ]
@@ -1602,13 +1612,23 @@ proc_status() {
     then
         if [ `echo $LINETOSAY | grep " for " | wc -l` = 0 ]
         then
-	    OUTPUT="14${POS}4 $REL 14created by4 $USR 14at4 $DAT"
-	else
-	    OUTPUT="14${POS}4 $REL 14created by4 $USR 14for4 $FOR 14at4 $DAT"
-	fi
+            OUTPUT="\00314${POS}\0034 $REL \00314created by\0034 $USR \00314at\0034 $DAT"
+        else
+            OUTPUT="\00314${POS}\0034 $REL \00314created by\0034 $USR \00314for\0034 $FOR \00314at\0034 $DAT"
+        fi
     else
         OUTPUT="$POS $REL created by $USR at $DAT"
     fi
+
+    # Mise à jour des messages de statut
+    if [ "$gllog" ]; then
+        if [ "$mode" = "gl" ]; then
+            echo "Release already exists on site: $WHAT"
+        else
+            echo "\00314Release already exists on site: \0034$WHAT"
+        fi
+    fi
+
     proc_cookies
     if [ "$AUTO" = "TRUE" ]; then
       proc_output "$HEADER $OUTPUT"

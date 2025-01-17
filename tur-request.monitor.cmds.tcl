@@ -19,8 +19,11 @@ namespace eval ::turrequest::cmd::monitor {
             "db" { show_db_metrics $chan }
             "alerts" { show_alerts $chan }
             "history" { show_history $chan [lindex $args 1] }
+            "trend" { show_trend $chan [lindex $args 1] }
+            "stats" { show_stats $chan [lindex $args 1] }
+            "anomalies" { show_anomalies $chan }
             default {
-                putserv "PRIVMSG $chan :\00314Usage:\003 !reqmon <system|requests|cache|db|alerts|history>"
+                putserv "PRIVMSG $chan :\00314Usage:\003 !reqmon <system|requests|cache|db|alerts|history|trend|stats|anomalies>"
             }
         }
     }
@@ -120,6 +123,69 @@ namespace eval ::turrequest::cmd::monitor {
             return "[format "%.1f" [expr {$bytes/1048576.0}]]MB"
         } else {
             return "[format "%.1f" [expr {$bytes/1073741824.0}]]GB"
+        }
+    }
+    
+    # Affichage tendance
+    proc show_trend {chan metric} {
+        if {$metric eq ""} {
+            putserv "PRIVMSG $chan :\00314Usage:\003 !reqmon trend <metric>"
+            return
+        }
+        
+        set trend [::turrequest::monitor::analyze_trends $metric 3600]
+        
+        switch $trend {
+            "insufficient_data" {
+                putserv "PRIVMSG $chan :\00314Tendance $metric:\003 Données insuffisantes"
+            }
+            "stable" {
+                putserv "PRIVMSG $chan :\00314Tendance $metric:\003 Stable"
+            }
+            "increasing" {
+                putserv "PRIVMSG $chan :\00314Tendance $metric:\003 En hausse"
+            }
+            "decreasing" {
+                putserv "PRIVMSG $chan :\00314Tendance $metric:\003 En baisse"
+            }
+        }
+    }
+    
+    # Affichage statistiques
+    proc show_stats {chan metric} {
+        if {$metric eq ""} {
+            putserv "PRIVMSG $chan :\00314Usage:\003 !reqmon stats <metric>"
+            return
+        }
+        
+        set avg [::turrequest::monitor::aggregate_metrics $metric 3600 "avg"]
+        set max [::turrequest::monitor::aggregate_metrics $metric 3600 "max"]
+        set min [::turrequest::monitor::aggregate_metrics $metric 3600 "min"]
+        
+        putserv "PRIVMSG $chan :\00314Stats $metric (dernière heure):\003"
+        putserv "PRIVMSG $chan :Moyenne: [format "%.2f" $avg] | Max: [format "%.2f" $max] | Min: [format "%.2f" $min]"
+    }
+    
+    # Affichage anomalies
+    proc show_anomalies {chan} {
+        sqlite3 db $::turrequest::db_file
+        set anomalies [db eval {
+            SELECT * FROM alerts 
+            WHERE type = 'anomaly'
+            AND timestamp > (strftime('%s', 'now') - 3600)
+            ORDER BY timestamp DESC
+            LIMIT 5
+        }]
+        
+        if {[llength $anomalies] == 0} {
+            putserv "PRIVMSG $chan :\00314Anomalies:\003 Aucune anomalie détectée"
+            return
+        }
+        
+        putserv "PRIVMSG $chan :\00314Dernières Anomalies:\003"
+        foreach {timestamp type message severity} $anomalies {
+            set time [clock format $timestamp -format "%H:%M:%S"]
+            putserv "PRIVMSG $chan :$time - $message"
         }
     }
 }

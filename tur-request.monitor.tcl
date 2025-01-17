@@ -119,7 +119,7 @@ namespace eval ::turrequest::monitor {
         
         set timestamp [clock seconds]
         
-        # CPU élevé
+        # Alertes système existantes
         if {$metrics(cpu) > $config(alert_cpu_threshold)} {
             set msg "Alerte CPU: Utilisation à $metrics(cpu)%"
             db eval {
@@ -129,7 +129,6 @@ namespace eval ::turrequest::monitor {
             putlog "Tur-Request: $msg"
         }
         
-        # Mémoire élevée
         if {$metrics(memory) > $config(alert_mem_threshold)} {
             set msg "Alerte Mémoire: Utilisation à $metrics(memory)%"
             db eval {
@@ -139,7 +138,6 @@ namespace eval ::turrequest::monitor {
             putlog "Tur-Request: $msg"
         }
         
-        # Espace disque faible
         if {$metrics(disk) > $config(alert_disk_threshold)} {
             set msg "Alerte Disque: Utilisation à $metrics(disk)%"
             db eval {
@@ -147,6 +145,24 @@ namespace eval ::turrequest::monitor {
                 VALUES ($timestamp, 'disk', $msg, 'critical')
             }
             putlog "Tur-Request: $msg"
+        }
+        
+        # Détection d'anomalies
+        foreach metric {cpu memory disk requests_active cache_hits db_queries} {
+            detect_anomalies $metric 3.0
+        }
+        
+        # Analyse tendances
+        foreach metric {cpu memory disk} {
+            set trend [analyze_trends $metric 3600]
+            if {$trend eq "increasing"} {
+                set msg "Tendance à la hausse détectée sur $metric"
+                db eval {
+                    INSERT INTO alerts (timestamp, type, message, severity)
+                    VALUES ($timestamp, 'trend', $msg, 'info')
+                }
+                putlog "Tur-Request: $msg"
+            }
         }
     }
     
@@ -172,6 +188,124 @@ namespace eval ::turrequest::monitor {
         }
         
         return $output
+    }
+    
+    # Tendances et prédictions
+    proc analyze_trends {metric period} {
+        set timestamp [clock seconds]
+        set start [expr {$timestamp - $period}]
+        
+        sqlite3 db $::turrequest::db_file
+        set values [db eval {
+            SELECT value 
+            FROM metrics 
+            WHERE name = $metric
+            AND timestamp > $start
+            ORDER BY timestamp ASC
+        }]
+        
+        if {[llength $values] < 2} {
+            return "insufficient_data"
+        }
+        
+        # Calcul tendance
+        set first [lindex $values 0]
+        set last [lindex $values end]
+        set trend [expr {($last - $first) / [llength $values]}]
+        
+        # Prédiction
+        if {abs($trend) < 0.1} {
+            return "stable"
+        } elseif {$trend > 0} {
+            return "increasing"
+        } else {
+            return "decreasing"
+        }
+    }
+    
+    # Agrégation des métriques
+    proc aggregate_metrics {metric period aggregation} {
+        set timestamp [clock seconds]
+        set start [expr {$timestamp - $period}]
+        
+        sqlite3 db $::turrequest::db_file
+        
+        switch $aggregation {
+            "avg" {
+                return [db eval {
+                    SELECT avg(value)
+                    FROM metrics
+                    WHERE name = $metric
+                    AND timestamp > $start
+                }]
+            }
+            "max" {
+                return [db eval {
+                    SELECT max(value)
+                    FROM metrics
+                    WHERE name = $metric
+                    AND timestamp > $start
+                }]
+            }
+            "min" {
+                return [db eval {
+                    SELECT min(value)
+                    FROM metrics
+                    WHERE name = $metric
+                    AND timestamp > $start
+                }]
+            }
+        }
+    }
+    
+    # Détection d'anomalies
+    proc detect_anomalies {metric threshold_std} {
+        set period 3600
+        set timestamp [clock seconds]
+        set start [expr {$timestamp - $period}]
+        
+        sqlite3 db $::turrequest::db_file
+        set values [db eval {
+            SELECT value
+            FROM metrics
+            WHERE name = $metric
+            AND timestamp > $start
+        }]
+        
+        if {[llength $values] < 10} {
+            return 0
+        }
+        
+        # Calcul moyenne et écart-type
+        set sum 0
+        foreach value $values {
+            set sum [expr {$sum + $value}]
+        }
+        set mean [expr {$sum / [llength $values]}]
+        
+        set sum_squared 0
+        foreach value $values {
+            set diff [expr {$value - $mean}]
+            set sum_squared [expr {$sum_squared + $diff * $diff}]
+        }
+        set std [expr {sqrt($sum_squared / [llength $values])}]
+        
+        # Vérification dernière valeur
+        set last [lindex $values end]
+        set zscore [expr {abs($last - $mean) / $std}]
+        
+        if {$zscore > $threshold_std} {
+            set msg "Anomalie détectée sur $metric: valeur=$last, zscore=$zscore"
+            set timestamp [clock seconds]
+            db eval {
+                INSERT INTO alerts (timestamp, type, message, severity)
+                VALUES ($timestamp, 'anomaly', $msg, 'warning')
+            }
+            putlog "Tur-Request: $msg"
+            return 1
+        }
+        
+        return 0
     }
 }
 

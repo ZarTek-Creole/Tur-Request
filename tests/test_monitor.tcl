@@ -118,6 +118,122 @@ test monitor-8.1 "Export métriques Prometheus" -body {
     expr {[string length $metrics] > 0}
 } -result 1
 
+# Tests tendances
+test monitor-9.1 "Analyse tendance croissante" -body {
+    sqlite3 db $::turrequest::db_file
+    set timestamp [clock seconds]
+    for {set i 0} {$i < 10} {incr i} {
+        set value [expr {$i * 10}]
+        set ts [expr {$timestamp - (10 - $i) * 60}]
+        db eval {
+            INSERT INTO metrics (timestamp, name, value)
+            VALUES ($ts, 'test_metric', $value)
+        }
+    }
+    ::turrequest::monitor::analyze_trends "test_metric" 3600
+} -result "increasing"
+
+test monitor-9.2 "Analyse tendance décroissante" -body {
+    sqlite3 db $::turrequest::db_file
+    set timestamp [clock seconds]
+    for {set i 0} {$i < 10} {incr i} {
+        set value [expr {(10 - $i) * 10}]
+        set ts [expr {$timestamp - (10 - $i) * 60}]
+        db eval {
+            INSERT INTO metrics (timestamp, name, value)
+            VALUES ($ts, 'test_metric2', $value)
+        }
+    }
+    ::turrequest::monitor::analyze_trends "test_metric2" 3600
+} -result "decreasing"
+
+test monitor-9.3 "Analyse tendance stable" -body {
+    sqlite3 db $::turrequest::db_file
+    set timestamp [clock seconds]
+    for {set i 0} {$i < 10} {incr i} {
+        set value 50
+        set ts [expr {$timestamp - (10 - $i) * 60}]
+        db eval {
+            INSERT INTO metrics (timestamp, name, value)
+            VALUES ($ts, 'test_metric3', $value)
+        }
+    }
+    ::turrequest::monitor::analyze_trends "test_metric3" 3600
+} -result "stable"
+
+# Tests agrégation
+test monitor-10.1 "Agrégation moyenne" -body {
+    sqlite3 db $::turrequest::db_file
+    set timestamp [clock seconds]
+    for {set i 1} {$i <= 5} {incr i} {
+        set ts [expr {$timestamp - $i * 60}]
+        db eval {
+            INSERT INTO metrics (timestamp, name, value)
+            VALUES ($ts, 'test_metric4', $i)
+        }
+    }
+    set avg [::turrequest::monitor::aggregate_metrics "test_metric4" 3600 "avg"]
+    expr {abs($avg - 3.0) < 0.01}
+} -result 1
+
+test monitor-10.2 "Agrégation maximum" -body {
+    ::turrequest::monitor::aggregate_metrics "test_metric4" 3600 "max"
+} -result 5
+
+test monitor-10.3 "Agrégation minimum" -body {
+    ::turrequest::monitor::aggregate_metrics "test_metric4" 3600 "min"
+} -result 1
+
+# Tests détection anomalies
+test monitor-11.1 "Détection anomalie" -body {
+    sqlite3 db $::turrequest::db_file
+    set timestamp [clock seconds]
+    # Valeurs normales
+    for {set i 0} {$i < 9} {incr i} {
+        set ts [expr {$timestamp - (10 - $i) * 60}]
+        db eval {
+            INSERT INTO metrics (timestamp, name, value)
+            VALUES ($ts, 'test_metric5', 50)
+        }
+    }
+    # Valeur anormale
+    set ts $timestamp
+    db eval {
+        INSERT INTO metrics (timestamp, name, value)
+        VALUES ($ts, 'test_metric5', 500)
+    }
+    ::turrequest::monitor::detect_anomalies "test_metric5" 3.0
+} -result 1
+
+test monitor-11.2 "Pas d'anomalie" -body {
+    sqlite3 db $::turrequest::db_file
+    set timestamp [clock seconds]
+    for {set i 0} {$i < 10} {incr i} {
+        set ts [expr {$timestamp - (10 - $i) * 60}]
+        db eval {
+            INSERT INTO metrics (timestamp, name, value)
+            VALUES ($ts, 'test_metric6', 50)
+        }
+    }
+    ::turrequest::monitor::detect_anomalies "test_metric6" 3.0
+} -result 0
+
+# Tests commandes IRC
+test monitor-12.1 "Commande trend" -body {
+    ::turrequest::cmd::monitor::show_trend "#test" "test_metric"
+    expr 1
+} -result 1
+
+test monitor-12.2 "Commande stats" -body {
+    ::turrequest::cmd::monitor::show_stats "#test" "test_metric4"
+    expr 1
+} -result 1
+
+test monitor-12.3 "Commande anomalies" -body {
+    ::turrequest::cmd::monitor::show_anomalies "#test"
+    expr 1
+} -result 1
+
 # Nettoyage
 cleanupTests
 

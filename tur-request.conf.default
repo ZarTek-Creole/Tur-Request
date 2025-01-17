@@ -1,0 +1,175 @@
+###############################################################################
+# Configuration Tur-Request v2.0.0
+###############################################################################
+
+# Version
+set ::turrequest::VERSION "2.0.0"
+
+###############################################################################
+# Configuration Générale
+###############################################################################
+
+# Racine glFTPd
+set ::turrequest::glroot "/glftpd"
+
+# Canaux IRC
+set ::turrequest::request_chan "#requests"
+set ::turrequest::announce_chan "#announce"
+
+# Base de données
+set ::turrequest::db_file "tur-request.db"
+
+# Fichier de log
+set ::turrequest::log_file "tur-request.log"
+
+# Niveau de log (DEBUG, INFO, WARN, ERROR)
+set ::turrequest::log_level "INFO"
+
+# Rotation des logs
+set ::turrequest::log_max_size 10485760  # 10MB
+set ::turrequest::log_max_files 5
+
+###############################################################################
+# Limites & Quotas
+###############################################################################
+
+# Points minimum pour requêtes
+set ::turrequest::min_points 0
+
+# Nombre maximum de requêtes actives par utilisateur
+set ::turrequest::max_requests 3
+
+# Temps minimum entre deux requêtes (secondes)
+set ::turrequest::request_time 3600
+
+# Temps maximum pour remplir une requête (jours)
+set ::turrequest::fill_time 7
+
+# Protection flood (secondes)
+set ::turrequest::flood_time 5
+
+###############################################################################
+# Points & Crédits
+###############################################################################
+
+# Points par action
+set ::turrequest::points(request) -5
+set ::turrequest::points(fill) 10
+set ::turrequest::points(upload) 1
+set ::turrequest::points(download) -1
+
+# Multiplicateurs par groupe
+set ::turrequest::multipliers(STAFF) 2.0
+set ::turrequest::multipliers(VIP) 1.5
+set ::turrequest::multipliers(DEFAULT) 1.0
+
+###############################################################################
+# Sections & Tags
+###############################################################################
+
+# Sections autorisées
+set ::turrequest::sections {
+    MOVIES
+    TV
+    APPS
+    GAMES
+    XXX
+}
+
+# Tags disponibles
+set ::turrequest::tags {
+    1080p
+    2160p
+    HDR
+    DV
+    AMZN
+    NFLX
+    DSNP
+    ATVP
+}
+
+###############################################################################
+# Intégration pzs-ng
+###############################################################################
+
+# Activation pzs-ng
+set ::turrequest::pzs::config(enabled) 1
+
+# Auto-fill
+set ::turrequest::pzs::config(auto_fill) 1
+
+# Score minimum pour correspondance
+set ::turrequest::pzs::config(match_score) 0.8
+
+# Dossiers exclus
+set ::turrequest::pzs::config(exclude_dirs) {
+    sample
+    proof
+    covers
+    subs
+}
+
+###############################################################################
+# Format Messages
+###############################################################################
+
+# Couleurs (mIRC)
+set ::turrequest::colors(error) 4
+set ::turrequest::colors(success) 3
+set ::turrequest::colors(info) 12
+set ::turrequest::colors(highlight) 7
+
+# Format requête
+set ::turrequest::format(request) "\[REQ-%id%\] %title% (%details%) par %user%"
+set ::turrequest::format(filled) "\[FILL-%id%\] %title% rempli par %filler% dans %path%"
+
+###############################################################################
+# Permissions
+###############################################################################
+
+# Groupes admin
+set ::turrequest::admin_groups {
+    SiteOP
+    STAFF
+}
+
+# Groupes bannis
+set ::turrequest::banned_groups {
+    BANNED
+    LEECH
+}
+
+# Permissions spéciales
+set ::turrequest::perms(clean) "SiteOP"
+set ::turrequest::perms(ban) "SiteOP STAFF"
+set ::turrequest::perms(delete) "SiteOP"
+
+###############################################################################
+# Hooks
+###############################################################################
+
+# Pre-request hook
+proc ::turrequest::hooks::pre_request {user title details} {
+    # Validation personnalisée
+    return 1
+}
+
+# Post-request hook
+proc ::turrequest::hooks::post_request {id user title details} {
+    # Actions après création
+}
+
+# Pre-fill hook
+proc ::turrequest::hooks::pre_fill {id user path} {
+    # Validation remplissage
+    return 1
+}
+
+# Post-fill hook
+proc ::turrequest::hooks::post_fill {id user path} {
+    # Actions après remplissage
+}
+
+###############################################################################
+# Fin Configuration
+############################################################################### 

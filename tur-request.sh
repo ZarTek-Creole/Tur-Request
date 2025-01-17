@@ -156,6 +156,7 @@ proc_cookies() {
   else
     OUTPUT=`echo $OUTPUT | sed -e "s/%BOLD%//g"`
     OUTPUT=`echo $OUTPUT | sed -e "s/%ULINE%//g"`
+    OUTPUT=`echo $OUTPUT | sed -e 's/[0-9][0-9]//g' -e 's/[0-9]//g'`
   fi
 }
 
@@ -629,7 +630,7 @@ proc_reorder() {
   ## Was any file created? Copy it if so. If not, no requests were found.
   if [ -e "$tmp/reorder.tmp" ]; then
     cp -f "$tmp/reorder.tmp" "$reqfile"
-    rm -f "tmp/reorder.tmp"
+    rm -f "$tmp/reorder.tmp"
     chmod 666 "$reqfile" >/dev/null 2>&1
   else
     ## Only say this if fix was run manually. Not when reqfilling etc.
@@ -739,7 +740,7 @@ proc_checkold() {
           rm -rf "$requests/$requesthead$RELEASE" >/dev/null 2>&1
         fi
 
-        proc_log "REQDELAUTO: \"crontab deleted $RELEASE - older than $removedays days.\""
+        proc_log "REQDELAUTO: \"crontab deleted $RELEASE - Older than $removedays days.\""
         if [ "$REWARD" ]; then
           proc_log "REQDELAUTOREWARD: \"Returned $REWARD MB to $return_username\""
         fi
@@ -798,7 +799,7 @@ proc_checkold() {
             if [ "$gllog" ]; then
               OUTPUT="$STATUSANNOUNCE"
               proc_cookies
-              LINETOSAY="$OUTPUT Deleting $dir because its from $reldate"
+              LINETOSAY="$OUTPUT 14Deleting4 $dir 14because it's from4 $reldate"
               echo `$datebin "+%a %b %e %T %Y"` TURGEN: \"$LINETOSAY\" >> $gllog
               unset LINETOSAY
             fi
@@ -806,7 +807,7 @@ proc_checkold() {
             if [ "$gllog" ]; then
               OUTPUT="$STATUSANNOUNCE"
               proc_cookies
-              LINETOSAY="$OUTPUT Was going to delete $dir because its from $reldate, but seems I couldnt."
+              LINETOSAY="$OUTPUT 14Was going to delete4 $dir 14because it's from4 $reldate,14 but seems I couldn't."
               echo `$datebin "+%a %b %e %T %Y"` TURGEN: \"$LINETOSAY\" >> $gllog
               unset LINETOSAY
             fi
@@ -850,11 +851,11 @@ proc_request() {
     fi
   fi
 
-  if [ "`$dirloglist_gl | grep -iv "STATUS: 3" | grep "/$WHAT$"`" ]; then
+  if [ "`$dirloglist_gl | egrep -iv "STATUS: 1|STATUS: 3" | grep "/$WHAT$"`" ]; then
     if [ "$mode" = "gl" ]; then
-        echo "Release already exist on site: `$dirloglist_gl | grep -iv "STATUS: 3" | grep "/$WHAT$" | tr -s "[:blank:]" "-" | sed 's/STATUS:-[0-2]-DIRNAME:-\/site//'`"
+	echo "Release already exists on site: `$dirloglist_gl | egrep -iv "STATUS: 1|STATUS: 3" | grep "/$WHAT$" | tr -s "[:blank:]" "-" | sed 's/STATUS:-[0-2]-DIRNAME:-\/site//'`"
     else
-        echo "14Release already exist on site: 4`$dirloglist_gl | grep -iv "STATUS: 3" | grep "/$WHAT$" | tr -s "[:blank:]" "-" | sed 's/STATUS:-[0-2]-DIRNAME:-\/site//'`"
+	echo "14Release already exists on site: 4`$dirloglist_gl | egrep -iv "STATUS: 1|STATUS: 3" | grep "/$WHAT$" | tr -s "[:blank:]" "-" | sed 's/STATUS:-[0-2]-DIRNAME:-\/site//'`"
     fi
     exit 0
   fi
@@ -1166,11 +1167,13 @@ proc_reqfilled() {
               done
               if [ "$NOMOVE" != "TRUE" ]; then
                 mv -f "$requests/$requesthead$RELEASE" "$requests/${filled_dir}$filledhead$RELEASE$NUMBER"
+		touch "$requests/${filled_dir}$filledhead$RELEASE$NUMBER"
                 COMPLETE_REQUEST="$requests/${filled_dir}$filledhead$RELEASE$NUMBER"
               fi
             else
               ## All ok, just move the dir.
               mv -f "$requests/$requesthead$RELEASE" "$requests/${filled_dir}$filledhead$RELEASE"
+	      touch "$requests/${filled_dir}$filledhead$RELEASE"
               COMPLETE_REQUEST="$requests/${filled_dir}$filledhead$RELEASE"
             fi
 
@@ -1579,13 +1582,33 @@ proc_status() {
         echo "$HEADER $OUTPUT"
       fi
       SAIDIT="TRUE"
-
     fi
 
     ## Request. One per line in file.
 
     LINETOSAY=`echo "$each" | tr -s '^' ' '`
-    OUTPUT="$LINETOSAY"
+    POS=`echo $LINETOSAY | cut -d' ' -f1-2 | sed 's/] .*/]/'`
+    REL=`echo $LINETOSAY | cut -d' ' -f2-3 | sed -e 's/[0-9]:] //g' -e 's/ ~.*//'`
+    USR=`echo $LINETOSAY | cut -d'~' -f2 | sed -e 's/ by //g' -e 's/ (.*//g'`
+    FOR=`echo $LINETOSAY | cut -d' ' -f8`
+    if [ `echo $LINETOSAY | grep " for " | wc -l` = 0 ]
+    then
+        DAT=`echo $LINETOSAY | cut -d' ' -f8- | sed 's/at //g'`
+    else
+        DAT=`echo $LINETOSAY | cut -d' ' -f10- | sed 's/at //g'`
+    fi
+    #OUTPUT="$LINETOSAY"
+    if [ "$mode" = "irc" ] || [ "$mode" = "gl" ]
+    then
+        if [ `echo $LINETOSAY | grep " for " | wc -l` = 0 ]
+        then
+	    OUTPUT="14${POS}4 $REL 14created by4 $USR 14at4 $DAT"
+	else
+	    OUTPUT="14${POS}4 $REL 14created by4 $USR 14for4 $FOR 14at4 $DAT"
+	fi
+    else
+        OUTPUT="$POS $REL created by $USR at $DAT"
+    fi
     proc_cookies
     if [ "$AUTO" = "TRUE" ]; then
       proc_output "$HEADER $OUTPUT"
